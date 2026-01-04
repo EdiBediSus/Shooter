@@ -116,16 +116,16 @@
         function upOP(d){
             if(!op[d.id]){
                 let mt=new THREE.MeshStandardMaterial({color:0x3366ff,emissive:0x0033ff});
-                let mh=new THREE.Mesh(new THREE.BoxGeometry(0.6,1.6,0.6),mt);
-                mh.position.set(d.x,d.y-0.8,d.z);mh.castShadow=1;sc.add(mh);
+                let mh=new THREE.Mesh(new THREE.BoxGeometry(1.2,3.2,1.2),mt);
+                mh.position.set(d.x,d.y-1.6,d.z);mh.castShadow=1;sc.add(mh);
                 let cv=document.createElement('canvas');cv.width=256;cv.height=64;
                 let ct=cv.getContext('2d');ct.fillStyle='#0f8';ct.font='bold 32px Courier';ct.textAlign='center';ct.fillText(d.name,128,40);
                 let tx=new THREE.CanvasTexture(cv);
                 let sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tx}));
-                sp.scale.set(2,0.5,1);sp.position.y=1.2;mh.add(sp);
+                sp.scale.set(3,0.75,1);sp.position.y=2;mh.add(sp);
                 op[d.id]={mesh:mh,data:d};
             }else{
-                op[d.id].mesh.position.set(d.x,d.y-0.8,d.z);
+                op[d.id].mesh.position.set(d.x,d.y-1.6,d.z);
                 op[d.id].mesh.rotation.y=-d.yaw;
                 op[d.id].data=d;
             }
@@ -353,6 +353,7 @@
                         document.getElementById('finalScore').textContent=scr;
                         document.getElementById('gameOver').style.display='block';
                         document.exitPointerLock();
+                        lk=0;
                     }
                 }
             });
