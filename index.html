@@ -55,7 +55,8 @@
     <div id="killFeed"></div>
     <div id="damageOverlay"></div>
     <div id="reloadInd">RELOADING...</div>
-    <div id="gameOver"><h1>GAME OVER</h1><div>Score: <span id="finalScore">0</span></div><button onclick="respawn()">RESPAWN</button></div>
+    <div id="gameOver"><h1>GAME OVER</h1><div>Score: <span id="finalScore">0</span></div><<button id="respawnBtn">RESPAWN</button>
+</div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
@@ -155,8 +156,14 @@
             crW();
             upH();
             document.getElementById('gameOver').style.display='none';
-            rd.domElement.requestPointerLock();
+            
         }
+
+        document.getElementById('respawnBtn').onclick = () => {
+            respawn();                      // reset game state
+            rd.domElement.requestPointerLock(); // 🔒 LOCK CURSOR (VALID USER CLICK)
+        };
+
 
         function init(){
             let tl=new THREE.TextureLoader();
