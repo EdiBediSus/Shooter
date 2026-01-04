@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FPS Shooter</title>
+    <title>FPS Shooter - Multiplayer</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { overflow: hidden; font-family: 'Courier New', monospace; background: #000; }
@@ -17,7 +17,7 @@
         #hitmarker { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 30px; height: 30px; opacity: 0; z-index: 15; }
         .hm { position: absolute; background: #fff; width: 3px; height: 12px; box-shadow: 0 0 8px #0f8; }
         @keyframes hit { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); } }
-        #killFeed { position: absolute; top: 20px; right: 20px; color: #fff; font-size: 14px; z-index: 10; }
+        #killFeed { position: absolute; top: 20px; right: 20px; color: #fff; font-size: 14px; z-index: 10; max-width: 300px; }
         .kill { background: rgba(0,0,0,0.7); padding: 8px 12px; margin-bottom: 4px; border-left: 3px solid #0f8; animation: slideIn 0.3s; }
         @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         #damageOverlay { position: absolute; inset: 0; background: radial-gradient(circle, transparent 30%, rgba(255,0,0,0.3)); opacity: 0; pointer-events: none; z-index: 5; transition: 0.3s; }
@@ -25,27 +25,51 @@
         #gameOver { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.95); color: #fff; padding: 60px; text-align: center; display: none; z-index: 20; border: 2px solid #0f8; }
         #gameOver h1 { margin-bottom: 20px; color: #f44; font-size: 48px; }
         #gameOver button { margin-top: 30px; padding: 15px 40px; font-size: 18px; cursor: pointer; background: #0f8; color: #000; border: none; font-weight: bold; }
-        #instructions { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; text-align: center; background: rgba(0,0,0,0.8); padding: 40px; z-index: 25; border: 2px solid #0f8; }
-        #instructions button { margin-top: 30px; padding: 15px 40px; font-size: 18px; cursor: pointer; background: #0f8; color: #000; border: none; font-weight: bold; }
+        #setupScreen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; text-align: center; background: rgba(0,0,0,0.9); padding: 40px; z-index: 25; border: 2px solid #0f8; max-width: 500px; }
+        #setupScreen h2 { margin-bottom: 20px; color: #0f8; }
+        #setupScreen input { width: 100%; padding: 12px; margin: 10px 0; font-size: 16px; background: #1a1a1a; border: 1px solid #0f8; color: #fff; font-family: 'Courier New', monospace; }
+        #setupScreen button { margin-top: 20px; padding: 15px 40px; font-size: 18px; cursor: pointer; background: #0f8; color: #000; border: none; font-weight: bold; }
+        #setupScreen .info { font-size: 12px; color: #888; margin-top: 10px; line-height: 1.6; }
+        #setupScreen a { color: #0f8; }
+        #playerList { position: absolute; top: 20px; left: 20px; color: #fff; font-size: 14px; z-index: 10; background: rgba(0,0,0,0.7); padding: 15px; border: 1px solid #0f8; }
+        #playerList h3 { color: #0f8; margin-bottom: 10px; font-size: 16px; }
+        .player-item { padding: 5px 0; opacity: 0.8; }
         .hide { display: none !important; }
     </style>
 </head>
 <body>
-    <div id="instructions"><h2>FPS SHOOTER</h2><p>WASD - Move | Space - Jump | Mouse - Look | Click - Shoot | R - Reload</p><p>1 - Rifle | 2 - Shotgun | 3 - Sniper | 4 - Knife</p><button onclick="start()">START</button></div>
+    <div id="setupScreen">
+        <h2>🎮 MULTIPLAYER FPS</h2>
+        <input type="text" id="playerName" placeholder="Enter your name" maxlength="20">
+        <input type="text" id="supabaseUrl" placeholder="Supabase URL">
+        <input type="password" id="supabaseKey" placeholder="Supabase Anon Key">
+        <button onclick="joinGame()">JOIN GAME</button>
+        <div class="info">
+            Need Supabase setup? 
+            <br>1. Go to <a href="https://supabase.com" target="_blank">supabase.com</a>
+            <br>2. Create free project
+            <br>3. Go to Settings → API
+            <br>4. Copy URL and anon key
+            <br>5. Run SQL: CREATE TABLE players (id TEXT PRIMARY KEY, name TEXT, x REAL, y REAL, z REAL, yaw REAL, pitch REAL, hp INT, score INT, weapon INT, updated_at TIMESTAMPTZ DEFAULT NOW());
+        </div>
+    </div>
     <div id="hud" class="hide"><div>HP <span class="hud-value" id="hp">100</span></div><div>AMMO <span class="hud-value" id="ammo">30</span><span id="maxAmmo">/30</span></div><div>SCORE <span class="hud-value" id="score">0</span></div></div>
     <div id="weaponName" class="hide">RIFLE</div>
     <div id="healthBar" class="hide"><div id="healthBarFill"></div></div>
     <div id="crosshair" class="hide"><div class="ch" style="width:2px;height:8px;left:50%;top:-12px;transform:translateX(-50%)"></div><div class="ch" style="width:2px;height:8px;left:50%;bottom:-12px;transform:translateX(-50%)"></div><div class="ch" style="width:8px;height:2px;left:-12px;top:50%;transform:translateY(-50%)"></div><div class="ch" style="width:8px;height:2px;right:-12px;top:50%;transform:translateY(-50%)"></div></div>
     <div id="hitmarker"><div class="hm" style="left:0;top:0;transform:rotate(45deg);transform-origin:top left"></div><div class="hm" style="right:0;top:0;transform:rotate(-45deg);transform-origin:top right"></div><div class="hm" style="left:0;bottom:0;transform:rotate(-45deg);transform-origin:bottom left"></div><div class="hm" style="right:0;bottom:0;transform:rotate(45deg);transform-origin:bottom right"></div></div>
+    <div id="playerList" class="hide"><h3>PLAYERS ONLINE</h3><div id="playerListContent"></div></div>
     <div id="killFeed"></div>
     <div id="damageOverlay"></div>
     <div id="reloadInd">RELOADING...</div>
     <div id="gameOver"><h1>GAME OVER</h1><div>Score: <span id="finalScore">0</span></div><button onclick="location.reload()">AGAIN</button></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         let scene,cam,rend,enemies=[],bullets=[],gunGrp,hp=100,ammo=30,score=0,locked=0,fwd=0,bck=0,lft=0,rgt=0;
         let yaw=0,pitch=0,recoil={x:0,y:0},sway={x:0,y:0},shake={x:0,y:0},mouse={x:0,y:0},bob=0,vel={y:0},grnd=1;
         let walls=[],obs=[],reload=0,lastShot=0,curWep=0,gunBob={x:0,y:0,z:0},customTex={};
+        let supabase,playerId,playerName,otherPlayers={},lastUpdate=0;
         const wpns=[
             {n:'RIFLE',a:30,ma:30,dmg:34,fr:150,rec:0.08,rng:100},
             {n:'SHOTGUN',a:8,ma:8,dmg:100,fr:800,rec:0.2,rng:30,pel:8},
@@ -59,26 +83,116 @@
             if(rep)t.repeat.set(rep[0],rep[1]);return t;
         }
 
-        function init(){
-            // Custom texture loader
-            let texLoader=new THREE.TextureLoader();
-            customTex={
-                grass:null,wall:null,obstacle:null,enemy:null,
-                rifle:null,shotgun:null,sniper:null,knife:null
-            };
-            // Load custom textures (place PNG files in same folder as HTML)
-            ['grass','wall','obstacle','enemy','rifle','shotgun','sniper','knife'].forEach(n=>{
-                texLoader.load(n+'.png',t=>{
-                    t.wrapS=t.wrapT=THREE.RepeatWrapping;
-                    t.magFilter=THREE.NearestFilter;
-                    if(n==='grass')t.repeat.set(50,50);
-                    if(n==='wall')t.repeat.set(20,4);
-                    if(n==='obstacle')t.repeat.set(4,4);
-                    customTex[n]=t;
-                    console.log('Loaded '+n+'.png');
-                },undefined,e=>console.log('Could not load '+n+'.png (file not found)'));
+        async function joinGame(){
+            playerName=document.getElementById('playerName').value.trim()||'Player';
+            let url=document.getElementById('supabaseUrl').value.trim();
+            let key=document.getElementById('supabaseKey').value.trim();
+            if(!url||!key){alert('Please enter Supabase credentials!');return;}
+            
+            supabase=window.supabase.createClient(url,key);
+            playerId='player_'+Math.random().toString(36).substr(2,9);
+            
+            document.getElementById('setupScreen').classList.add('hide');
+            ['hud','healthBar','crosshair','weaponName','playerList'].forEach(id=>document.getElementById(id).classList.remove('hide'));
+            
+            init();
+            
+            // Insert player
+            await supabase.from('players').insert({
+                id:playerId,name:playerName,x:0,y:1.7,z:0,yaw:0,pitch:0,hp:100,score:0,weapon:0
             });
+            
+            // Subscribe to changes
+            supabase.channel('game').on('postgres_changes',{event:'*',schema:'public',table:'players'},payload=>{
+                if(payload.eventType==='INSERT'||payload.eventType==='UPDATE'){
+                    if(payload.new.id!==playerId)updateOtherPlayer(payload.new);
+                }else if(payload.eventType==='DELETE'){
+                    removeOtherPlayer(payload.old.id);
+                }
+            }).subscribe();
+            
+            // Update loop
+            setInterval(updateMyPosition,50);
+            
+            // Cleanup on close
+            window.addEventListener('beforeunload',()=>{
+                supabase.from('players').delete().eq('id',playerId);
+            });
+            
+            // Load other players
+            loadOtherPlayers();
+            
+            rend.domElement.requestPointerLock();
+            document.addEventListener('pointerlockchange',()=>locked=document.pointerLockElement===rend.domElement);
+        }
 
+        async function loadOtherPlayers(){
+            let {data}=await supabase.from('players').select('*');
+            if(data){
+                data.forEach(p=>{
+                    if(p.id!==playerId)updateOtherPlayer(p);
+                });
+            }
+        }
+
+        async function updateMyPosition(){
+            if(!cam||hp<=0)return;
+            await supabase.from('players').update({
+                x:cam.position.x,y:cam.position.y,z:cam.position.z,
+                yaw:yaw,pitch:pitch,hp:hp,score:score,weapon:curWep,
+                updated_at:new Date().toISOString()
+            }).eq('id',playerId);
+        }
+
+        function updateOtherPlayer(data){
+            if(!otherPlayers[data.id]){
+                let mat=new THREE.MeshStandardMaterial({color:0x3366ff,emissive:0x0033ff,roughness:0.7});
+                let mesh=new THREE.Mesh(new THREE.BoxGeometry(0.6,1.6,0.6),mat);
+                mesh.position.set(data.x,data.y-0.8,data.z);
+                mesh.castShadow=1;
+                scene.add(mesh);
+                
+                // Name tag
+                let canvas=document.createElement('canvas');
+                canvas.width=256;canvas.height=64;
+                let ctx=canvas.getContext('2d');
+                ctx.fillStyle='#0f8';
+                ctx.font='bold 32px Courier';
+                ctx.textAlign='center';
+                ctx.fillText(data.name,128,40);
+                let tex=new THREE.CanvasTexture(canvas);
+                let sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:tex}));
+                sprite.scale.set(2,0.5,1);
+                sprite.position.y=1.2;
+                mesh.add(sprite);
+                
+                otherPlayers[data.id]={mesh:mesh,data:data};
+            }else{
+                otherPlayers[data.id].mesh.position.set(data.x,data.y-0.8,data.z);
+                otherPlayers[data.id].mesh.rotation.y=-data.yaw;
+                otherPlayers[data.id].data=data;
+            }
+            updatePlayerList();
+        }
+
+        function removeOtherPlayer(id){
+            if(otherPlayers[id]){
+                scene.remove(otherPlayers[id].mesh);
+                delete otherPlayers[id];
+                updatePlayerList();
+            }
+        }
+
+        function updatePlayerList(){
+            let list=document.getElementById('playerListContent');
+            list.innerHTML='';
+            list.innerHTML+=`<div class="player-item">👤 ${playerName} (You)</div>`;
+            Object.values(otherPlayers).forEach(p=>{
+                list.innerHTML+=`<div class="player-item">👤 ${p.data.name}</div>`;
+            });
+        }
+
+        function init(){
             scene=new THREE.Scene();
             scene.background=new THREE.Color(0x87ceeb);
             scene.fog=new THREE.Fog(0x87ceeb,0,120);
@@ -97,21 +211,11 @@
             dl.shadow.mapSize.height=2048;
             scene.add(dl);
 
-            // Better grass texture
             let gd=[76,140,43,255,68,124,39,255,82,156,47,255,72,132,41,255,78,148,45,255,70,128,40,255,80,152,46,255,74,136,42,255].flatMap(x=>[x,x,x,255]);
             let gt=makeTex(gd,4,2,[50,50]);
             let gnd=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshStandardMaterial({map:gt,roughness:0.9}));
             gnd.rotation.x=-Math.PI/2;gnd.receiveShadow=1;scene.add(gnd);
-            // Apply custom texture when loaded
-            setTimeout(()=>{
-                if(customTex.grass){
-                    gnd.material.map=customTex.grass;
-                    gnd.material.needsUpdate=1;
-                    console.log('Applied grass texture');
-                }
-            },200);
 
-            // Better brick wall texture
             let wd=[90,70,60,255,85,65,55,255,95,75,65,255,88,68,58,255,92,72,62,255,86,66,56,255,94,74,64,255,89,69,59,255].flatMap(x=>[x,x,x,255]);
             let wt=makeTex(wd,4,2,[20,4]);
             let wm=new THREE.MeshStandardMaterial({map:wt,roughness:0.8});
@@ -119,18 +223,7 @@
                 let w=new THREE.Mesh(new THREE.BoxGeometry(c[0],c[1],c[2]),wm.clone());
                 w.position.set(c[3],c[4],c[5]);w.castShadow=w.receiveShadow=1;scene.add(w);walls.push(w);
             });
-            // Apply custom texture when loaded
-            setTimeout(()=>{
-                if(customTex.wall){
-                    walls.forEach(w=>{
-                        w.material.map=customTex.wall;
-                        w.material.needsUpdate=1;
-                    });
-                    console.log('Applied wall texture');
-                }
-            },200);
 
-            // Better concrete texture
             let od=[120,120,125,255,110,110,115,255,115,115,120,255,105,105,110,255,118,118,123,255,108,108,113,255,122,122,127,255,112,112,117,255].flatMap(x=>[x,x,x,255]);
             let ot=makeTex(od,4,2,[4,4]);
             let om=new THREE.MeshStandardMaterial({map:ot,roughness:0.7});
@@ -138,16 +231,6 @@
                 let o=new THREE.Mesh(new THREE.BoxGeometry(2.5,2,2.5),om.clone());
                 o.position.set(p[0],1,p[1]);o.castShadow=o.receiveShadow=1;scene.add(o);obs.push(o);
             });
-            // Apply custom texture when loaded
-            setTimeout(()=>{
-                if(customTex.obstacle){
-                    obs.forEach(o=>{
-                        o.material.map=customTex.obstacle;
-                        o.material.needsUpdate=1;
-                    });
-                    console.log('Applied obstacle texture');
-                }
-            },200);
 
             for(let i=0;i<5;i++)spawnEnemy();
             gunGrp=new THREE.Group();cam.add(gunGrp);scene.add(cam);createWep();
@@ -216,11 +299,9 @@
         }
 
         function switchWep(i){if(reload)return;curWep=i;ammo=wpns[i].a;createWep();updateHUD();document.getElementById('weaponName').textContent=wpns[i].n;}
-        function start(){document.getElementById('instructions').classList.add('hide');['hud','healthBar','crosshair','weaponName'].forEach(id=>document.getElementById(id).classList.remove('hide'));rend.domElement.requestPointerLock();document.addEventListener('pointerlockchange',()=>locked=document.pointerLockElement===rend.domElement);}
         
         function spawnEnemy(){
             let mat=new THREE.MeshStandardMaterial({color:0xff3366,emissive:0x660033,roughness:0.7});
-            if(customTex.enemy)mat.map=customTex.enemy;
             let e=new THREE.Mesh(new THREE.BoxGeometry(0.8,1.8,0.8),mat);
             let a=Math.random()*6.28,d=8+Math.random()*12;
             e.position.set(Math.cos(a)*d,0.9,Math.sin(a)*d);e.castShadow=1;e.hp=100;e.spd=0.08;scene.add(e);enemies.push(e);
@@ -242,11 +323,22 @@
             for(let i=0;i<pel;i++){
                 let spread=new THREE.Vector2((Math.random()-0.5)*(pel>1?0.15:0.01),(Math.random()-0.5)*(pel>1?0.15:0.01));
                 rc.setFromCamera(spread,cam);
+                
+                // Check hits on other players
+                let playerMeshes=Object.values(otherPlayers).map(p=>p.mesh);
+                let playerHits=rc.intersectObjects(playerMeshes);
+                if(playerHits.length>0&&playerHits[0].distance<w.rng){
+                    // Hit another player - show hitmarker
+                    document.getElementById('hitmarker').style.animation='none';
+                    setTimeout(()=>document.getElementById('hitmarker').style.animation='hit 0.2s',10);
+                    continue;
+                }
+                
+                // Check hits on AI enemies
                 let hits=rc.intersectObjects(enemies);
                 if(hits.length>0&&hits[0].distance<w.rng){
                     hitEnemy(hits[0].object,w.dmg/pel);
                     
-                    // Bullet tracer
                     let tracer=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,hits[0].distance,4),new THREE.MeshBasicMaterial({color:0xffff88,transparent:1,opacity:0.8}));
                     tracer.rotation.x=Math.PI/2;
                     tracer.position.copy(cam.position);
@@ -258,7 +350,6 @@
                 }
             }
 
-            // Muzzle flash
             let f=new THREE.Mesh(new THREE.SphereGeometry(0.15),new THREE.MeshBasicMaterial({color:0xffaa00}));
             f.position.copy(cam.position).add(dir.multiplyScalar(0.8));
             scene.add(f);
@@ -332,7 +423,6 @@
                 bob+=0.15;
             }
 
-            // Improved jump collision
             vel.y-=0.015;
             let ny=cam.position.y+vel.y;
             let tp=cam.position.clone();tp.y=ny;
@@ -352,7 +442,6 @@
                 }else{grnd=0;}
             }
 
-            // Smooth animations
             recoil.x+=(0-recoil.x)*0.15;recoil.y+=(0-recoil.y)*0.15;
             sway.x+=(mouse.x-sway.x)*0.08;sway.y+=(mouse.y-sway.y)*0.08;
             mouse.x*=0.85;mouse.y*=0.85;
@@ -397,7 +486,6 @@
 
             rend.render(scene,cam);
         }
-        init();
     </script>
 </body>
 </html>
