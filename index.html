@@ -55,7 +55,7 @@
     <div id="killFeed"></div>
     <div id="damageOverlay"></div>
     <div id="reloadInd">RELOADING...</div>
-    <div id="gameOver"><h1>GAME OVER</h1><div>Score: <span id="finalScore">0</span></div><button onclick="location.reload()">AGAIN</button></div>
+    <div id="gameOver"><h1>GAME OVER</h1><div>Score: <span id="finalScore">0</span></div><button onclick="respawn()">RESPAWN</button></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
@@ -64,7 +64,7 @@
         
         let sc,cm,rd,en=[],bu=[],gg,hp=100,am=30,scr=0,lk=0,fw=0,bk=0,lf=0,rt=0,yw=0,pt=0;
         let rc={x:0,y:0},sw={x:0,y:0},sk={x:0,y:0},ms={x:0,y:0},bb=0,vl={y:0},gr=1,wl=[],ob=[];
-        let rl=0,ls=0,cw=0,gb={x:0,y:0,z:0},sb,pid,pnm,op={};
+        let rl=0,ls=0,cw=0,gb={x:0,y:0,z:0},sb,pid,pnm,op={},ctx={};
         const wp=[
             {n:'RIFLE',a:30,ma:30,d:34,f:150,r:0.08,g:100},
             {n:'SHOTGUN',a:8,ma:8,d:100,f:800,r:0.2,g:30,p:8},
@@ -142,7 +142,35 @@
             Object.values(op).forEach(p=>ls.innerHTML+='<div class="player-item">👤 '+p.data.name+'</div>');
         }
 
+        function respawn(){
+            hp=100;
+            scr=0;
+            am=30;
+            cw=0;
+            cm.position.set(0,1.7,0);
+            yw=0;
+            pt=0;
+            vl={y:0};
+            gr=1;
+            crW();
+            upH();
+            document.getElementById('gameOver').style.display='none';
+            rd.domElement.requestPointerLock();
+        }
+
         function init(){
+            let tl=new THREE.TextureLoader();
+            ctx={grass:null,wall:null,obstacle:null,enemy:null};
+            ['grass','wall','obstacle','enemy'].forEach(n=>{
+                tl.load(n+'.png',t=>{
+                    t.wrapS=t.wrapT=THREE.RepeatWrapping;
+                    t.magFilter=THREE.NearestFilter;
+                    if(n==='grass')t.repeat.set(50,50);
+                    if(n==='wall')t.repeat.set(20,4);
+                    if(n==='obstacle')t.repeat.set(4,4);
+                    ctx[n]=t;
+                },undefined,e=>console.log('No '+n+'.png'));
+            });
             sc=new THREE.Scene();sc.background=new THREE.Color(0x87ceeb);sc.fog=new THREE.Fog(0x87ceeb,0,120);
             cm=new THREE.PerspectiveCamera(80,innerWidth/innerHeight,0.1,1000);cm.position.set(0,1.7,0);
             rd=new THREE.WebGLRenderer({antialias:1});rd.setSize(innerWidth,innerHeight);rd.shadowMap.enabled=1;document.body.appendChild(rd.domElement);
@@ -152,6 +180,7 @@
             let gt=tx(gd,2,2,[50,50]);
             let gn=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshStandardMaterial({map:gt}));
             gn.rotation.x=-Math.PI/2;gn.receiveShadow=1;sc.add(gn);
+            setTimeout(()=>{if(ctx.grass){gn.material.map=ctx.grass;gn.material.needsUpdate=1;}},200);
             let wd=[90,70,60,255,85,65,55,255].flatMap(x=>[x,x,x,255]);
             let wt=tx(wd,2,1,[20,4]);
             let wm=new THREE.MeshStandardMaterial({map:wt});
@@ -159,6 +188,7 @@
                 let w=new THREE.Mesh(new THREE.BoxGeometry(c[0],c[1],c[2]),wm.clone());
                 w.position.set(c[3],c[4],c[5]);w.castShadow=w.receiveShadow=1;sc.add(w);wl.push(w);
             });
+            setTimeout(()=>{if(ctx.wall){wl.forEach(w=>{w.material.map=ctx.wall;w.material.needsUpdate=1;});}},200);
             let od=[120,120,125,255,110,110,115,255].flatMap(x=>[x,x,x,255]);
             let ot=tx(od,2,1,[4,4]);
             let om=new THREE.MeshStandardMaterial({map:ot});
@@ -166,6 +196,7 @@
                 let o=new THREE.Mesh(new THREE.BoxGeometry(2.5,2,2.5),om.clone());
                 o.position.set(p[0],1,p[1]);o.castShadow=o.receiveShadow=1;sc.add(o);ob.push(o);
             });
+            setTimeout(()=>{if(ctx.obstacle){ob.forEach(o=>{o.material.map=ctx.obstacle;o.material.needsUpdate=1;});}},200);
             for(let i=0;i<5;i++)spE();
             gg=new THREE.Group();cm.add(gg);sc.add(cm);crW();
             document.addEventListener('mousemove',e=>{
@@ -223,6 +254,7 @@
         
         function spE(){
             let mt=new THREE.MeshStandardMaterial({color:0xff3366,emissive:0x660033});
+            if(ctx.enemy)mt.map=ctx.enemy;
             let e=new THREE.Mesh(new THREE.BoxGeometry(0.8,1.8,0.8),mt);
             let a=Math.random()*6.28,d=8+Math.random()*12;
             e.position.set(Math.cos(a)*d,0.9,Math.sin(a)*d);e.castShadow=1;e.hp=100;e.spd=0.08;sc.add(e);en.push(e);
