@@ -30,7 +30,6 @@
         #setupScreen input { width: 100%; padding: 12px; margin: 10px 0; font-size: 16px; background: #1a1a1a; border: 1px solid #0f8; color: #fff; font-family: 'Courier New', monospace; }
         #setupScreen button { margin-top: 20px; padding: 15px 40px; font-size: 18px; cursor: pointer; background: #0f8; color: #000; border: none; font-weight: bold; }
         #setupScreen .info { font-size: 12px; color: #888; margin-top: 10px; line-height: 1.6; }
-        #setupScreen a { color: #0f8; }
         #playerList { position: absolute; top: 20px; left: 20px; color: #fff; font-size: 14px; z-index: 10; background: rgba(0,0,0,0.7); padding: 15px; border: 1px solid #0f8; }
         #playerList h3 { color: #0f8; margin-bottom: 10px; font-size: 16px; }
         .player-item { padding: 5px 0; opacity: 0.8; }
@@ -41,16 +40,11 @@
     <div id="setupScreen">
         <h2>🎮 MULTIPLAYER FPS</h2>
         <input type="text" id="playerName" placeholder="Enter your name" maxlength="20">
-        <input type="text" id="supabaseUrl" placeholder="Supabase URL">
-        <input type="password" id="supabaseKey" placeholder="Supabase Anon Key">
         <button onclick="joinGame()">JOIN GAME</button>
         <div class="info">
-            Need Supabase setup? 
-            <br>1. Go to <a href="https://supabase.com" target="_blank">supabase.com</a>
-            <br>2. Create free project
-            <br>3. Go to Settings → API
-            <br>4. Copy URL and anon key
-            <br>5. Run SQL: CREATE TABLE players (id TEXT PRIMARY KEY, name TEXT, x REAL, y REAL, z REAL, yaw REAL, pitch REAL, hp INT, score INT, weapon INT, updated_at TIMESTAMPTZ DEFAULT NOW());
+            Open multiple browser tabs to play with yourself!<br>
+            Controls: WASD to move, Mouse to aim, Click to shoot<br>
+            1-4 to switch weapons, R to reload, Space to jump
         </div>
     </div>
     <div id="hud" class="hide"><div>HP <span class="hud-value" id="hp">100</span></div><div>AMMO <span class="hud-value" id="ammo">30</span><span id="maxAmmo">/30</span></div><div>SCORE <span class="hud-value" id="score">0</span></div></div>
@@ -66,6 +60,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
+        // HARDCODED API KEYS - REPLACE WITH YOUR OWN
+        const SUPABASE_URL = 'https://rfqptvsdrjaefbxfcctn.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmcXB0dnNkcmphZWZieGZjY3RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1NDAyNDYsImV4cCI6MjA4MzExNjI0Nn0.-R1KLz-zEzf3TmxjobxVrfC_Q2S-ya2fnvXGwgPW0h8';
+        
         let scene,cam,rend,enemies=[],bullets=[],gunGrp,hp=100,ammo=30,score=0,locked=0,fwd=0,bck=0,lft=0,rgt=0;
         let yaw=0,pitch=0,recoil={x:0,y:0},sway={x:0,y:0},shake={x:0,y:0},mouse={x:0,y:0},bob=0,vel={y:0},grnd=1;
         let walls=[],obs=[],reload=0,lastShot=0,curWep=0,gunBob={x:0,y:0,z:0},customTex={};
@@ -85,11 +83,8 @@
 
         async function joinGame(){
             playerName=document.getElementById('playerName').value.trim()||'Player';
-            let url=document.getElementById('supabaseUrl').value.trim();
-            let key=document.getElementById('supabaseKey').value.trim();
-            if(!url||!key){alert('Please enter Supabase credentials!');return;}
             
-            supabase=window.supabase.createClient(url,key);
+            supabase=window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
             playerId='player_'+Math.random().toString(36).substr(2,9);
             
             document.getElementById('setupScreen').classList.add('hide');
