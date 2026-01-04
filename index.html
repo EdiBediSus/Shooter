@@ -92,7 +92,12 @@
                 }else if(pl.eventType==='DELETE'){rmOP(pl.old.id);}
             }).subscribe();
             setInterval(upMP,50);
-            window.addEventListener('beforeunload',()=>sb.from('players').delete().eq('id',pid));
+            window.addEventListener('beforeunload',async()=>{
+                await sb.from('players').delete().eq('id',pid);
+            });
+            window.addEventListener('unload',async()=>{
+                await sb.from('players').delete().eq('id',pid);
+            });
             ldOP();
             rd.domElement.requestPointerLock();
             document.addEventListener('pointerlockchange',()=>lk=document.pointerLockElement===rd.domElement);
