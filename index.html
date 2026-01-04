@@ -66,14 +66,17 @@
                 grass:null,wall:null,obstacle:null,enemy:null,
                 rifle:null,shotgun:null,sniper:null,knife:null
             };
-            // Try loading custom textures (place images in same folder as HTML)
+            // Load custom textures (place PNG files in same folder as HTML)
             ['grass','wall','obstacle','enemy','rifle','shotgun','sniper','knife'].forEach(n=>{
                 texLoader.load(n+'.png',t=>{
                     t.wrapS=t.wrapT=THREE.RepeatWrapping;
                     t.magFilter=THREE.NearestFilter;
+                    if(n==='grass')t.repeat.set(50,50);
+                    if(n==='wall')t.repeat.set(20,4);
+                    if(n==='obstacle')t.repeat.set(4,4);
                     customTex[n]=t;
                     console.log('Loaded '+n+'.png');
-                },undefined,()=>{});
+                },undefined,e=>console.log('Could not load '+n+'.png (file not found)'));
             });
 
             scene=new THREE.Scene();
@@ -96,27 +99,55 @@
 
             // Better grass texture
             let gd=[76,140,43,255,68,124,39,255,82,156,47,255,72,132,41,255,78,148,45,255,70,128,40,255,80,152,46,255,74,136,42,255].flatMap(x=>[x,x,x,255]);
-            let gt=customTex.grass||makeTex(gd,4,2,[50,50]);
+            let gt=makeTex(gd,4,2,[50,50]);
             let gnd=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshStandardMaterial({map:gt,roughness:0.9}));
             gnd.rotation.x=-Math.PI/2;gnd.receiveShadow=1;scene.add(gnd);
+            // Apply custom texture when loaded
+            setTimeout(()=>{
+                if(customTex.grass){
+                    gnd.material.map=customTex.grass;
+                    gnd.material.needsUpdate=1;
+                    console.log('Applied grass texture');
+                }
+            },200);
 
             // Better brick wall texture
             let wd=[90,70,60,255,85,65,55,255,95,75,65,255,88,68,58,255,92,72,62,255,86,66,56,255,94,74,64,255,89,69,59,255].flatMap(x=>[x,x,x,255]);
-            let wt=customTex.wall||makeTex(wd,4,2,[20,4]);
+            let wt=makeTex(wd,4,2,[20,4]);
             let wm=new THREE.MeshStandardMaterial({map:wt,roughness:0.8});
             [[50,5,0.5,0,2.5,-25],[50,5,0.5,0,2.5,25],[0.5,5,50,25,2.5,0],[0.5,5,50,-25,2.5,0]].forEach(c=>{
-                let w=new THREE.Mesh(new THREE.BoxGeometry(c[0],c[1],c[2]),wm);
+                let w=new THREE.Mesh(new THREE.BoxGeometry(c[0],c[1],c[2]),wm.clone());
                 w.position.set(c[3],c[4],c[5]);w.castShadow=w.receiveShadow=1;scene.add(w);walls.push(w);
             });
+            // Apply custom texture when loaded
+            setTimeout(()=>{
+                if(customTex.wall){
+                    walls.forEach(w=>{
+                        w.material.map=customTex.wall;
+                        w.material.needsUpdate=1;
+                    });
+                    console.log('Applied wall texture');
+                }
+            },200);
 
             // Better concrete texture
             let od=[120,120,125,255,110,110,115,255,115,115,120,255,105,105,110,255,118,118,123,255,108,108,113,255,122,122,127,255,112,112,117,255].flatMap(x=>[x,x,x,255]);
-            let ot=customTex.obstacle||makeTex(od,4,2,[4,4]);
+            let ot=makeTex(od,4,2,[4,4]);
             let om=new THREE.MeshStandardMaterial({map:ot,roughness:0.7});
             [[8,8],[-8,-8],[12,-12],[-12,12],[0,18],[18,0],[-18,0],[0,-18]].forEach(p=>{
-                let o=new THREE.Mesh(new THREE.BoxGeometry(2.5,2,2.5),om);
+                let o=new THREE.Mesh(new THREE.BoxGeometry(2.5,2,2.5),om.clone());
                 o.position.set(p[0],1,p[1]);o.castShadow=o.receiveShadow=1;scene.add(o);obs.push(o);
             });
+            // Apply custom texture when loaded
+            setTimeout(()=>{
+                if(customTex.obstacle){
+                    obs.forEach(o=>{
+                        o.material.map=customTex.obstacle;
+                        o.material.needsUpdate=1;
+                    });
+                    console.log('Applied obstacle texture');
+                }
+            },200);
 
             for(let i=0;i<5;i++)spawnEnemy();
             gunGrp=new THREE.Group();cam.add(gunGrp);scene.add(cam);createWep();
