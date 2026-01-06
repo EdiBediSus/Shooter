@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FPS Shooter - Multiplayer!</title>
+    <title>FPS Shooter - Multiplayer</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { overflow: hidden; font-family: 'Courier New', monospace; background: #000; }
@@ -38,7 +38,7 @@
 </head>
 <body>
     <div id="setupScreen">
-        <h2>🎮 MULTIPLAYER FPS</h2>
+        <h2>🎮 MULTIPLAYER FPS!</h2>
         <input type="text" id="playerName" placeholder="Enter your name" maxlength="20">
         <button onclick="joinGame()">JOIN GAME</button>
         <div class="info">
@@ -107,21 +107,10 @@
                 })
                 .subscribe();
             
-            // Update position regularly (20 times per second)
-            setInterval(upMP,50);
-            
-            // Poll for other players' positions more frequently
-            setInterval(async()=>{
-                if(hp<=0)return;
-                let {data}=await sb.from('players').select('*');
-                if(data){
-                    data.forEach(p=>{
-                        if(p.id!==pid){
-                            upOP(p);
-                        }
-                    });
-                }
-            },100); // Poll every 100ms for smoother movement
+            // Update position regularly - even when pointer is unlocked
+            setInterval(()=>{
+                upMP();
+            },50); // Update 20 times per second
             
             // Check for stale players every 5 seconds
             setInterval(async()=>{
