@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FPS Shooter - Multiplayer</title>
+    <title>FPS Shooter - Multiplayer!</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { overflow: hidden; font-family: 'Courier New', monospace; background: #000; }
@@ -107,8 +107,21 @@
                 })
                 .subscribe();
             
-            // Update position regularly
+            // Update position regularly (20 times per second)
             setInterval(upMP,50);
+            
+            // Poll for other players' positions more frequently
+            setInterval(async()=>{
+                if(hp<=0)return;
+                let {data}=await sb.from('players').select('*');
+                if(data){
+                    data.forEach(p=>{
+                        if(p.id!==pid){
+                            upOP(p);
+                        }
+                    });
+                }
+            },100); // Poll every 100ms for smoother movement
             
             // Check for stale players every 5 seconds
             setInterval(async()=>{
@@ -432,11 +445,11 @@
             if(!lk){
                 // Still update other players and enemies when unlocked
                 Object.values(op).forEach(p=>{
-                    p.mesh.position.lerp(p.targetPos,0.3);
+                    p.mesh.position.lerp(p.targetPos,0.5);
                     let currentYaw=p.mesh.rotation.y;
                     let targetYaw=-p.targetYaw;
                     let diff=((targetYaw-currentYaw+Math.PI*3)%(Math.PI*2))-Math.PI;
-                    p.mesh.rotation.y+=diff*0.3;
+                    p.mesh.rotation.y+=diff*0.5;
                 });
                 en.forEach(e=>{
                     let ed=new THREE.Vector3().subVectors(cm.position,e.position).normalize();
@@ -505,16 +518,16 @@
                 }
             });
             
-            // Smooth interpolation for other players - THIS IS THE KEY FIX
+            // Smooth interpolation for other players with faster lerp
             Object.values(op).forEach(p=>{
-                // Use faster lerp for more responsive movement
-                p.mesh.position.lerp(p.targetPos,0.3);
+                // Use much faster lerp (0.5 instead of 0.3) for more responsive movement
+                p.mesh.position.lerp(p.targetPos,0.5);
                 
-                // Smooth rotation
+                // Smooth rotation with faster interpolation
                 let currentYaw=p.mesh.rotation.y;
                 let targetYaw=-p.targetYaw;
                 let diff=((targetYaw-currentYaw+Math.PI*3)%(Math.PI*2))-Math.PI;
-                p.mesh.rotation.y+=diff*0.3;
+                p.mesh.rotation.y+=diff*0.5;
             });
             
             rd.render(sc,cm);
