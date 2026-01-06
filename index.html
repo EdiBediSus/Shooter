@@ -38,12 +38,13 @@
 </head>
 <body>
     <div id="setupScreen">
-        <h2>🎮 MULTIPLAYER SHOOTER FPS</h2>
+        <h2>🎮 MULTIPLAYER FPS</h2>
         <input type="text" id="playerName" placeholder="Enter your name" maxlength="20">
         <button onclick="joinGame()">JOIN GAME</button>
         <div class="info">
             Controls: WASD to move, Mouse to aim, Click to shoot<br>
-            1-4 to switch weapons, R to reload, Space to jump, ESC to unlock mouse
+            1-4 to switch weapons, R to reload, Space to jump<br>
+            Press ESC or click outside to unlock mouse, click to lock again
         </div>
     </div>
     <div id="hud" class="hide"><div>HP <span class="hud-value" id="hp">100</span></div><div>AMMO <span class="hud-value" id="ammo">30</span><span id="maxAmmo">/30</span></div><div>SCORE <span class="hud-value" id="score">0</span></div></div>
@@ -293,7 +294,6 @@
                 if(e.code=='Space'&&gr){vl.y=0.25;gr=0;}
                 if(e.code=='KeyR'&&am<wp[cw].ma&&!rl)doR();
                 if(e.code=='Digit1')swW(0);if(e.code=='Digit2')swW(1);if(e.code=='Digit3')swW(2);if(e.code=='Digit4')swW(3);
-                if(e.code=='Escape'){document.exitPointerLock();}
             });
             document.addEventListener('keyup',e=>{
                 if(e.code=='KeyW')fw=0;if(e.code=='KeyS')bk=0;if(e.code=='KeyA')lf=0;if(e.code=='KeyD')rt=0;
@@ -428,7 +428,33 @@
                 rd.render(sc,cm);
                 return;
             }
-            if(!lk){rd.render(sc,cm);return;}
+            // Always render, even when pointer is unlocked
+            if(!lk){
+                // Still update other players and enemies when unlocked
+                Object.values(op).forEach(p=>{
+                    p.mesh.position.lerp(p.targetPos,0.3);
+                    let currentYaw=p.mesh.rotation.y;
+                    let targetYaw=-p.targetYaw;
+                    let diff=((targetYaw-currentYaw+Math.PI*3)%(Math.PI*2))-Math.PI;
+                    p.mesh.rotation.y+=diff*0.3;
+                });
+                en.forEach(e=>{
+                    let ed=new THREE.Vector3().subVectors(cm.position,e.position).normalize();
+                    let np=e.position.clone().add(ed.multiplyScalar(e.spd));
+                    if(!chC(np,0.4))e.position.copy(np);
+                    if(e.position.distanceTo(cm.position)<2){
+                        hp=Math.max(0,hp-0.5);upH();
+                        document.getElementById('damageOverlay').style.opacity='0.5';
+                        setTimeout(()=>document.getElementById('damageOverlay').style.opacity='0',200);
+                        if(hp<=0){
+                            document.getElementById('finalScore').textContent=scr;
+                            document.getElementById('gameOver').style.display='block';
+                        }
+                    }
+                });
+                rd.render(sc,cm);
+                return;
+            }
             let sp=0.18,dr=new THREE.Vector3();
             if(fw)dr.z-=1;if(bk)dr.z+=1;if(lf)dr.x-=1;if(rt)dr.x+=1;
             if(dr.length()>0){
