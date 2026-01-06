@@ -43,7 +43,7 @@
         <button onclick="joinGame()">JOIN GAME</button>
         <div class="info">
             Controls: WASD to move, Mouse to aim, Click to shoot<br>
-            1-4 to switch weapons, R to reload, Space to jump
+            1-4 to switch weapons, R to reload, Space to jump, ESC to unlock mouse
         </div>
     </div>
     <div id="hud" class="hide"><div>HP <span class="hud-value" id="hp">100</span></div><div>AMMO <span class="hud-value" id="ammo">30</span><span id="maxAmmo">/30</span></div><div>SCORE <span class="hud-value" id="score">0</span></div></div>
@@ -55,8 +55,7 @@
     <div id="killFeed"></div>
     <div id="damageOverlay"></div>
     <div id="reloadInd">RELOADING...</div>
-    <div id="gameOver"><h1>GAME OVER</h1><div>Score: <span id="finalScore">0</span></div><<button id="respawnBtn">RESPAWN</button>
-</div>
+    <div id="gameOver"><h1>GAME OVER</h1><div>Score: <span id="finalScore">0</span></div><button id="respawnBtn">RESPAWN</button></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
@@ -90,9 +89,24 @@
             sb.channel('game').on('postgres_changes',{event:'*',schema:'public',table:'players'},pl=>{
                 if(pl.eventType==='INSERT'||pl.eventType==='UPDATE'){
                     if(pl.new.id!==pid)upOP(pl.new);
-                }else if(pl.eventType==='DELETE'){rmOP(pl.old.id);}
+                }else if(pl.eventType==='DELETE'){
+                    rmOP(pl.old.id);
+                }
+            }).on('presence',{event:'leave'},({key})=>{
+                rmOP(key);
             }).subscribe();
             setInterval(upMP,50);
+            setInterval(async()=>{
+                let {data}=await sb.from('players').select('*');
+                if(data){
+                    let activeIds=data.map(p=>p.id);
+                    Object.keys(op).forEach(id=>{
+                        if(!activeIds.includes(id)){
+                            rmOP(id);
+                        }
+                    });
+                }
+            },5000);
             window.addEventListener('beforeunload',async()=>{
                 await sb.from('players').delete().eq('id',pid);
             });
@@ -124,10 +138,10 @@
                 let tx=new THREE.CanvasTexture(cv);
                 let sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tx}));
                 sp.scale.set(3,0.75,1);sp.position.y=2;mh.add(sp);
-                op[d.id]={mesh:mh,data:d};
+                op[d.id]={mesh:mh,data:d,targetPos:new THREE.Vector3(d.x,d.y-1.6,d.z),targetYaw:d.yaw};
             }else{
-                op[d.id].mesh.position.set(d.x,d.y-1.6,d.z);
-                op[d.id].mesh.rotation.y=-d.yaw;
+                op[d.id].targetPos.set(d.x,d.y-1.6,d.z);
+                op[d.id].targetYaw=d.yaw;
                 op[d.id].data=d;
             }
             upPL();
@@ -156,14 +170,10 @@
             crW();
             upH();
             document.getElementById('gameOver').style.display='none';
-            
+            rd.domElement.requestPointerLock();
         }
 
-        document.getElementById('respawnBtn').onclick = () => {
-            respawn();                      // reset game state
-            rd.domElement.requestPointerLock(); // 🔒 LOCK CURSOR (VALID USER CLICK)
-        };
-
+        document.getElementById('respawnBtn').onclick=respawn;
 
         function init(){
             let tl=new THREE.TextureLoader();
@@ -216,10 +226,12 @@
                 if(e.code=='Space'&&gr){vl.y=0.25;gr=0;}
                 if(e.code=='KeyR'&&am<wp[cw].ma&&!rl)doR();
                 if(e.code=='Digit1')swW(0);if(e.code=='Digit2')swW(1);if(e.code=='Digit3')swW(2);if(e.code=='Digit4')swW(3);
+                if(e.code=='Escape'){document.exitPointerLock();}
             });
             document.addEventListener('keyup',e=>{
                 if(e.code=='KeyW')fw=0;if(e.code=='KeyS')bk=0;if(e.code=='KeyA')lf=0;if(e.code=='KeyD')rt=0;
             });
+            document.addEventListener('click',()=>{if(!lk&&hp>0)rd.domElement.requestPointerLock();});
             addEventListener('resize',()=>{cm.aspect=innerWidth/innerHeight;cm.updateProjectionMatrix();rd.setSize(innerWidth,innerHeight);});
             an();
         }
@@ -344,7 +356,12 @@
 
         function an(){
             requestAnimationFrame(an);
-            if(!lk||hp<=0){rd.render(sc,cm);return;}
+            if(hp<=0){
+                document.exitPointerLock();
+                rd.render(sc,cm);
+                return;
+            }
+            if(!lk){rd.render(sc,cm);return;}
             let sp=0.18,dr=new THREE.Vector3();
             if(fw)dr.z-=1;if(bk)dr.z+=1;if(lf)dr.x-=1;if(rt)dr.x+=1;
             if(dr.length()>0){
@@ -391,9 +408,14 @@
                     if(hp<=0){
                         document.getElementById('finalScore').textContent=scr;
                         document.getElementById('gameOver').style.display='block';
-                        lk=0;
                     }
                 }
+            });
+            Object.values(op).forEach(p=>{
+                p.mesh.position.lerp(p.targetPos,0.2);
+                let ay=p.mesh.rotation.y;let ty=-p.targetYaw;
+                let df=((ty-ay+Math.PI*3)%(Math.PI*2))-Math.PI;
+                p.mesh.rotation.y+=df*0.2;
             });
             rd.render(sc,cm);
         }
