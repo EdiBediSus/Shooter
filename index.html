@@ -38,12 +38,12 @@
 </head>
 <body>
     <div id="setupScreen">
-        <h2>🎮 MULTIPLAYER FPS</h2>
+        <h2>🎮 MULTIPLAYER SHOOTER FPS</h2>
         <input type="text" id="playerName" placeholder="Enter your name" maxlength="20">
         <button onclick="joinGame()">JOIN GAME</button>
         <div class="info">
             Controls: WASD to move, Mouse to aim, Click to shoot<br>
-            1-4 to switch weapons, R to reload, Space to jump
+            1-4 to switch weapons, R to reload, Space to jump, ESC to unlock mouse
         </div>
     </div>
     <div id="hud" class="hide"><div>HP <span class="hud-value" id="hp">100</span></div><div>AMMO <span class="hud-value" id="ammo">30</span><span id="maxAmmo">/30</span></div><div>SCORE <span class="hud-value" id="score">0</span></div></div>
@@ -64,7 +64,7 @@
         
         let sc,cm,rd,en=[],bu=[],gg,hp=100,am=30,scr=0,lk=0,fw=0,bk=0,lf=0,rt=0,yw=0,pt=0;
         let rc={x:0,y:0},sw={x:0,y:0},sk={x:0,y:0},ms={x:0,y:0},bb=0,vl={y:0},gr=1,wl=[],ob=[];
-        let rl=0,ls=0,cw=0,gb={x:0,y:0,z:0},sb,pid,pnm,op={},ctx={};
+        let rl=0,ls=0,cw=0,gb={x:0,y:0,z:0},sb,pid,pnm,op={},ctx={},chn;
         const wp=[
             {n:'RIFLE',a:30,ma:30,d:34,f:150,r:0.08,g:100},
             {n:'SHOTGUN',a:8,ma:8,d:100,f:800,r:0.2,g:30,p:8},
@@ -85,21 +85,59 @@
             document.getElementById('setupScreen').classList.add('hide');
             ['hud','healthBar','crosshair','weaponName','playerList'].forEach(id=>document.getElementById(id).classList.remove('hide'));
             init();
-            await sb.from('players').insert({id:pid,name:pnm,x:0,y:1.7,z:0,yaw:0,pitch:0,hp:100,score:0,weapon:0});
-            sb.channel('game').on('postgres_changes',{event:'*',schema:'public',table:'players'},pl=>{
-                if(pl.eventType==='INSERT'||pl.eventType==='UPDATE'){
-                    if(pl.new.id!==pid)upOP(pl.new);
-                }else if(pl.eventType==='DELETE'){rmOP(pl.old.id);}
-            }).subscribe();
+            
+            // Insert player into database
+            await sb.from('players').insert({id:pid,name:pnm,x:0,y:1.7,z:0,yaw:0,pitch:0,hp:100,score:0,weapon:0,updated_at:new Date().toISOString()});
+            
+            // Subscribe to realtime changes
+            chn=sb.channel('game_room')
+                .on('postgres_changes',{event:'INSERT',schema:'public',table:'players'},payload=>{
+                    console.log('Player joined:',payload.new.name);
+                    if(payload.new.id!==pid)upOP(payload.new);
+                })
+                .on('postgres_changes',{event:'UPDATE',schema:'public',table:'players'},payload=>{
+                    if(payload.new.id!==pid){
+                        upOP(payload.new);
+                    }
+                })
+                .on('postgres_changes',{event:'DELETE',schema:'public',table:'players'},payload=>{
+                    console.log('Player left:',payload.old.id);
+                    rmOP(payload.old.id);
+                })
+                .subscribe();
+            
+            // Update position regularly
             setInterval(upMP,50);
+            
+            // Check for stale players every 5 seconds
+            setInterval(async()=>{
+                let now=new Date();
+                let staleTime=new Date(now.getTime()-10000); // 10 seconds ago
+                
+                // Get all players
+                let {data}=await sb.from('players').select('*');
+                if(data){
+                    data.forEach(p=>{
+                        if(p.id===pid)return;
+                        let lastUpdate=new Date(p.updated_at);
+                        if(lastUpdate<staleTime){
+                            // Player is stale, remove them
+                            console.log('Removing stale player:',p.name);
+                            rmOP(p.id);
+                            sb.from('players').delete().eq('id',p.id).then(()=>console.log('Deleted stale player'));
+                        }else if(!op[p.id]){
+                            // Player exists but we don't have them locally
+                            upOP(p);
+                        }
+                    });
+                }
+            },5000);
+            
+            // Cleanup on page unload
             window.addEventListener('beforeunload',async()=>{
                 await sb.from('players').delete().eq('id',pid);
             });
-            document.addEventListener('visibilitychange',()=>{
-                if(document.hidden){
-                    fw=bk=lf=rt=0;
-                }
-            });
+            
             ldOP();
             rd.domElement.requestPointerLock();
             document.addEventListener('pointerlockchange',()=>lk=document.pointerLockElement===rd.domElement);
@@ -107,34 +145,77 @@
 
         async function ldOP(){
             let {data}=await sb.from('players').select('*');
-            if(data)data.forEach(p=>{if(p.id!==pid)upOP(p);});
+            if(data){
+                console.log('Loading existing players:',data.length);
+                data.forEach(p=>{if(p.id!==pid)upOP(p);});
+            }
         }
 
         async function upMP(){
             if(!cm||hp<=0)return;
-            await sb.from('players').update({x:cm.position.x,y:cm.position.y,z:cm.position.z,yaw:yw,pitch:pt,hp:hp,score:scr,weapon:cw,updated_at:new Date().toISOString()}).eq('id',pid);
+            await sb.from('players').update({
+                x:cm.position.x,
+                y:cm.position.y,
+                z:cm.position.z,
+                yaw:yw,
+                pitch:pt,
+                hp:hp,
+                score:scr,
+                weapon:cw,
+                updated_at:new Date().toISOString()
+            }).eq('id',pid);
         }
 
         function upOP(d){
+            if(!d||!d.id)return;
+            
             if(!op[d.id]){
+                console.log('Creating player mesh for:',d.name);
                 let mt=new THREE.MeshStandardMaterial({color:0x3366ff,emissive:0x0033ff});
                 let mh=new THREE.Mesh(new THREE.BoxGeometry(1.2,3.2,1.2),mt);
-                mh.position.set(d.x,d.y-1.6,d.z);mh.castShadow=1;sc.add(mh);
-                let cv=document.createElement('canvas');cv.width=256;cv.height=64;
-                let ct=cv.getContext('2d');ct.fillStyle='#0f8';ct.font='bold 32px Courier';ct.textAlign='center';ct.fillText(d.name,128,40);
+                mh.position.set(d.x,d.y-1.6,d.z);
+                mh.castShadow=1;
+                sc.add(mh);
+                
+                let cv=document.createElement('canvas');
+                cv.width=256;
+                cv.height=64;
+                let ct=cv.getContext('2d');
+                ct.fillStyle='#0f8';
+                ct.font='bold 32px Courier';
+                ct.textAlign='center';
+                ct.fillText(d.name,128,40);
                 let tx=new THREE.CanvasTexture(cv);
                 let sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tx}));
-                sp.scale.set(3,0.75,1);sp.position.y=2;mh.add(sp);
-                op[d.id]={mesh:mh,data:d,target:{x:d.x,y:d.y,z:d.z,yaw:d.yaw}};
+                sp.scale.set(3,0.75,1);
+                sp.position.y=2;
+                mh.add(sp);
+                
+                op[d.id]={
+                    mesh:mh,
+                    data:d,
+                    targetPos:new THREE.Vector3(d.x,d.y-1.6,d.z),
+                    targetYaw:d.yaw,
+                    lastUpdate:Date.now()
+                };
             }else{
-                op[d.id].target={x:d.x,y:d.y,z:d.z,yaw:d.yaw};
-                op[d.id].data=d;
+                // Update existing player
+                let player=op[d.id];
+                player.targetPos.set(d.x,d.y-1.6,d.z);
+                player.targetYaw=d.yaw;
+                player.data=d;
+                player.lastUpdate=Date.now();
             }
             upPL();
         }
 
         function rmOP(id){
-            if(op[id]){sc.remove(op[id].mesh);delete op[id];upPL();}
+            if(op[id]){
+                console.log('Removing player mesh:',id);
+                sc.remove(op[id].mesh);
+                delete op[id];
+                upPL();
+            }
         }
 
         function upPL(){
@@ -156,14 +237,10 @@
             crW();
             upH();
             document.getElementById('gameOver').style.display='none';
-            document.exitPointerLock();
+            rd.domElement.requestPointerLock();
         }
 
-        document.getElementById('respawnBtn').onclick = () => {
-            respawn();
-            setTimeout(()=>rd.domElement.requestPointerLock(),100);
-        };
-
+        document.getElementById('respawnBtn').onclick=respawn;
 
         function init(){
             let tl=new THREE.TextureLoader();
@@ -216,10 +293,12 @@
                 if(e.code=='Space'&&gr){vl.y=0.25;gr=0;}
                 if(e.code=='KeyR'&&am<wp[cw].ma&&!rl)doR();
                 if(e.code=='Digit1')swW(0);if(e.code=='Digit2')swW(1);if(e.code=='Digit3')swW(2);if(e.code=='Digit4')swW(3);
+                if(e.code=='Escape'){document.exitPointerLock();}
             });
             document.addEventListener('keyup',e=>{
                 if(e.code=='KeyW')fw=0;if(e.code=='KeyS')bk=0;if(e.code=='KeyA')lf=0;if(e.code=='KeyD')rt=0;
             });
+            document.addEventListener('click',()=>{if(!lk&&hp>0)rd.domElement.requestPointerLock();});
             addEventListener('resize',()=>{cm.aspect=innerWidth/innerHeight;cm.updateProjectionMatrix();rd.setSize(innerWidth,innerHeight);});
             an();
         }
@@ -268,7 +347,6 @@
         }
 
         function sh(){
-            if(hp<=0)return;
             let w=wp[cw];
             if(!lk||am<=0||rl||Date.now()-ls<w.f)return;
             if(w.m){mlA();return;}
@@ -345,20 +423,12 @@
 
         function an(){
             requestAnimationFrame(an);
-            if(!lk||hp<=0){
-                Object.values(op).forEach(p=>{
-                    if(p.target){
-                        p.mesh.position.x+=(p.target.x-1.6-p.mesh.position.x)*0.2;
-                        p.mesh.position.y+=(p.target.y-1.6-p.mesh.position.y)*0.2;
-                        p.mesh.position.z+=(p.target.z-p.mesh.position.z)*0.2;
-                        let ay=p.mesh.rotation.y,ty=p.target.yaw;
-                        let df=((ty-ay+Math.PI*3)%(Math.PI*2))-Math.PI;
-                        p.mesh.rotation.y+=df*0.2;
-                    }
-                });
+            if(hp<=0){
+                document.exitPointerLock();
                 rd.render(sc,cm);
                 return;
             }
+            if(!lk){rd.render(sc,cm);return;}
             let sp=0.18,dr=new THREE.Vector3();
             if(fw)dr.z-=1;if(bk)dr.z+=1;if(lf)dr.x-=1;if(rt)dr.x+=1;
             if(dr.length()>0){
@@ -405,11 +475,22 @@
                     if(hp<=0){
                         document.getElementById('finalScore').textContent=scr;
                         document.getElementById('gameOver').style.display='block';
-                        document.exitPointerLock();
-                        lk=0;
                     }
                 }
             });
+            
+            // Smooth interpolation for other players - THIS IS THE KEY FIX
+            Object.values(op).forEach(p=>{
+                // Use faster lerp for more responsive movement
+                p.mesh.position.lerp(p.targetPos,0.3);
+                
+                // Smooth rotation
+                let currentYaw=p.mesh.rotation.y;
+                let targetYaw=-p.targetYaw;
+                let diff=((targetYaw-currentYaw+Math.PI*3)%(Math.PI*2))-Math.PI;
+                p.mesh.rotation.y+=diff*0.3;
+            });
+            
             rd.render(sc,cm);
         }
     </script>
