@@ -33,6 +33,7 @@
         #playerList { position: absolute; top: 20px; left: 20px; color: #fff; font-size: 14px; z-index: 10; background: rgba(0,0,0,0.7); padding: 15px; border: 1px solid #0f8; }
         #playerList h3 { color: #0f8; margin-bottom: 10px; font-size: 16px; }
         .player-item { padding: 5px 0; opacity: 0.8; }
+        #connectionStatus { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #0f8; padding: 10px 20px; border: 1px solid #0f8; font-size: 14px; z-index: 10; }
         .hide { display: none !important; }
     </style>
 </head>
@@ -47,6 +48,7 @@
             Press ESC or click outside to unlock mouse, click to lock again
         </div>
     </div>
+    <div id="connectionStatus" class="hide">● Connected</div>
     <div id="hud" class="hide"><div>HP <span class="hud-value" id="hp">100</span></div><div>AMMO <span class="hud-value" id="ammo">30</span><span id="maxAmmo">/30</span></div><div>SCORE <span class="hud-value" id="score">0</span></div></div>
     <div id="weaponName" class="hide">RIFLE</div>
     <div id="healthBar" class="hide"><div id="healthBarFill"></div></div>
@@ -58,14 +60,10 @@
     <div id="reloadInd">RELOADING...</div>
     <div id="gameOver"><h1>GAME OVER</h1><div>Score: <span id="finalScore">0</span></div><button id="respawnBtn">RESPAWN</button></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-        const SB_URL='https://rfqptvsdrjaefbxfcctn.supabase.co';
-        const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmcXB0dnNkcmphZWZieGZjY3RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1NDAyNDYsImV4cCI6MjA4MzExNjI0Nn0.-R1KLz-zEzf3TmxjobxVrfC_Q2S-ya2fnvXGwgPW0h8';
-        
         let sc,cm,rd,en=[],bu=[],gg,hp=100,am=30,scr=0,lk=0,fw=0,bk=0,lf=0,rt=0,yw=0,pt=0;
         let rc={x:0,y:0},sw={x:0,y:0},sk={x:0,y:0},ms={x:0,y:0},bb=0,vl={y:0},gr=1,wl=[],ob=[];
-        let rl=0,ls=0,cw=0,gb={x:0,y:0,z:0},sb,pid,pnm,op={},ctx={},chn;
+        let rl=0,ls=0,cw=0,gb={x:0,y:0,z:0},ws,pid,pnm,op={},ctx={};
         const wp=[
             {n:'RIFLE',a:30,ma:30,d:34,f:150,r:0.08,g:100},
             {n:'SHOTGUN',a:8,ma:8,d:100,f:800,r:0.2,g:30,p:8},
@@ -79,101 +77,126 @@
             if(rp)t.repeat.set(rp[0],rp[1]);return t;
         }
 
-        async function joinGame(){
+        function joinGame(){
             pnm=document.getElementById('playerName').value.trim()||'Player';
-            sb=window.supabase.createClient(SB_URL,SB_KEY);
             pid='p_'+Math.random().toString(36).substr(2,9);
+            
             document.getElementById('setupScreen').classList.add('hide');
-            ['hud','healthBar','crosshair','weaponName','playerList'].forEach(id=>document.getElementById(id).classList.remove('hide'));
+            ['hud','healthBar','crosshair','weaponName','playerList','connectionStatus'].forEach(id=>document.getElementById(id).classList.remove('hide'));
+            
             init();
-            
-            // Insert player into database
-            await sb.from('players').insert({id:pid,name:pnm,x:0,y:1.7,z:0,yaw:0,pitch:0,hp:100,score:0,weapon:0,updated_at:new Date().toISOString()});
-            
-            // Subscribe to realtime changes
-            chn=sb.channel('game_room')
-                .on('postgres_changes',{event:'INSERT',schema:'public',table:'players'},payload=>{
-                    console.log('Player joined:',payload.new.name);
-                    if(payload.new.id!==pid)upOP(payload.new);
-                })
-                .on('postgres_changes',{event:'UPDATE',schema:'public',table:'players'},payload=>{
-                    if(payload.new.id!==pid){
-                        upOP(payload.new);
-                    }
-                })
-                .on('postgres_changes',{event:'DELETE',schema:'public',table:'players'},payload=>{
-                    console.log('Player left:',payload.old.id);
-                    rmOP(payload.old.id);
-                })
-                .subscribe();
-            
-            // Update position regularly - even when pointer is unlocked
-            setInterval(()=>{
-                upMP();
-            },50); // Update 20 times per second
-            
-            // Check for stale players every 5 seconds
-            setInterval(async()=>{
-                let now=new Date();
-                let staleTime=new Date(now.getTime()-10000); // 10 seconds ago
-                
-                // Get all players
-                let {data}=await sb.from('players').select('*');
-                if(data){
-                    data.forEach(p=>{
-                        if(p.id===pid)return;
-                        let lastUpdate=new Date(p.updated_at);
-                        if(lastUpdate<staleTime){
-                            // Player is stale, remove them
-                            console.log('Removing stale player:',p.name);
-                            rmOP(p.id);
-                            sb.from('players').delete().eq('id',p.id).then(()=>console.log('Deleted stale player'));
-                        }else if(!op[p.id]){
-                            // Player exists but we don't have them locally
-                            upOP(p);
-                        }
-                    });
-                }
-            },5000);
+            connectWebSocket();
             
             // Cleanup on page unload
-            window.addEventListener('beforeunload',async()=>{
-                await sb.from('players').delete().eq('id',pid);
+            window.addEventListener('beforeunload',()=>{
+                if(ws&&ws.readyState===WebSocket.OPEN){
+                    ws.close();
+                }
             });
             
-            ldOP();
             rd.domElement.requestPointerLock();
             document.addEventListener('pointerlockchange',()=>lk=document.pointerLockElement===rd.domElement);
         }
 
-        async function ldOP(){
-            let {data}=await sb.from('players').select('*');
-            if(data){
-                console.log('Loading existing players:',data.length);
-                data.forEach(p=>{if(p.id!==pid)upOP(p);});
-            }
-        }
-
-        async function upMP(){
-            if(!cm||hp<=0)return;
-            await sb.from('players').update({
-                x:cm.position.x,
-                y:cm.position.y,
-                z:cm.position.z,
-                yaw:yw,
-                pitch:pt,
-                hp:hp,
-                score:scr,
-                weapon:cw,
-                updated_at:new Date().toISOString()
-            }).eq('id',pid);
+        function connectWebSocket(){
+            // Use wss:// for production (Render) or ws:// for local development
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                console.log('Connected to server');
+                document.getElementById('connectionStatus').textContent = '● Connected';
+                document.getElementById('connectionStatus').style.color = '#0f8';
+                
+                // Send join message
+                ws.send(JSON.stringify({
+                    type: 'join',
+                    id: pid,
+                    name: pnm,
+                    x: cm.position.x,
+                    y: cm.position.y,
+                    z: cm.position.z,
+                    yaw: yw,
+                    pitch: pt,
+                    hp: hp,
+                    score: scr,
+                    weapon: cw
+                }));
+                
+                // Send updates regularly
+                setInterval(()=>{
+                    if(ws.readyState === WebSocket.OPEN && hp > 0){
+                        ws.send(JSON.stringify({
+                            type: 'update',
+                            x: cm.position.x,
+                            y: cm.position.y,
+                            z: cm.position.z,
+                            yaw: yw,
+                            pitch: pt,
+                            hp: hp,
+                            score: scr,
+                            weapon: cw
+                        }));
+                    }
+                }, 50); // 20 updates per second
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    switch(data.type){
+                        case 'init':
+                            // Load existing players
+                            console.log('Loading existing players:', data.players.length);
+                            data.players.forEach(p => upOP(p));
+                            break;
+                            
+                        case 'player_joined':
+                            console.log('Player joined:', data.player.name);
+                            upOP(data.player);
+                            break;
+                            
+                        case 'player_update':
+                            upOP(data.player);
+                            break;
+                            
+                        case 'player_left':
+                            console.log('Player left:', data.id);
+                            rmOP(data.id);
+                            break;
+                    }
+                } catch(error){
+                    console.error('Error processing message:', error);
+                }
+            };
+            
+            ws.onclose = () => {
+                console.log('Disconnected from server');
+                document.getElementById('connectionStatus').textContent = '● Disconnected';
+                document.getElementById('connectionStatus').style.color = '#f44';
+                
+                // Try to reconnect after 3 seconds
+                setTimeout(()=>{
+                    if(hp > 0){
+                        console.log('Attempting to reconnect...');
+                        connectWebSocket();
+                    }
+                }, 3000);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
         }
 
         function upOP(d){
             if(!d||!d.id)return;
             
             if(!op[d.id]){
-                console.log('Creating player mesh for:',d.name);
+                console.log('Creating player mesh for:', d.name);
                 let mt=new THREE.MeshStandardMaterial({color:0x3366ff,emissive:0x0033ff});
                 let mh=new THREE.Mesh(new THREE.BoxGeometry(1.2,3.2,1.2),mt);
                 mh.position.set(d.x,d.y-1.6,d.z);
@@ -214,7 +237,7 @@
 
         function rmOP(id){
             if(op[id]){
-                console.log('Removing player mesh:',id);
+                console.log('Removing player mesh:', id);
                 sc.remove(op[id].mesh);
                 delete op[id];
                 upPL();
@@ -430,9 +453,7 @@
                 rd.render(sc,cm);
                 return;
             }
-            // Always render, even when pointer is unlocked
             if(!lk){
-                // Still update other players and enemies when unlocked
                 Object.values(op).forEach(p=>{
                     p.mesh.position.lerp(p.targetPos,0.5);
                     let currentYaw=p.mesh.rotation.y;
@@ -507,12 +528,8 @@
                 }
             });
             
-            // Smooth interpolation for other players with faster lerp
             Object.values(op).forEach(p=>{
-                // Use much faster lerp (0.5 instead of 0.3) for more responsive movement
                 p.mesh.position.lerp(p.targetPos,0.5);
-                
-                // Smooth rotation with faster interpolation
                 let currentYaw=p.mesh.rotation.y;
                 let targetYaw=-p.targetYaw;
                 let diff=((targetYaw-currentYaw+Math.PI*3)%(Math.PI*2))-Math.PI;
